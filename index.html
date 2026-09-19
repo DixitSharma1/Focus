@@ -3,20 +3,52 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="description" content="FocusList — A clean, accessible task management app to organize your daily focus.">
-  <meta name="theme-color" content="#0F1729">
+  <meta name="description" content="FocusList — A clean, accessible task management app to organize your daily tasks with priority tracking, smart filters, and local persistence.">
+  <meta name="theme-color" content="#111827">
+  <meta name="color-scheme" content="dark">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="FocusList — Stay Focused">
+  <meta property="og:description" content="A clean, accessible task management app to organize your daily tasks.">
+  <meta property="og:type" content="website">
+
   <title>FocusList — Stay Focused</title>
 
-  <!-- Preconnect for performance -->
+  <!-- Favicon (inline SVG data URI) -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%236366f1'/><text x='6' y='22' font-family='monospace' font-weight='700' font-size='15' fill='white'>FL</text></svg>">
+
+  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<!-- ── SKIP NAVIGATION (Accessibility) ── -->
+<!-- ── SKIP NAVIGATION ── -->
 <a href="#main-content" class="skip-link">Skip to main content</a>
+
+<!-- ── TOAST CONTAINER ── -->
+<div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="false"></div>
+
+<!-- ── KEYBOARD SHORTCUTS MODAL ── -->
+<div id="shortcutsModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="shortcutsTitle" hidden>
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2 id="shortcutsTitle" class="modal-title">Keyboard Shortcuts</h2>
+      <button class="modal-close" id="shortcutsClose" aria-label="Close shortcuts dialog" type="button">✕</button>
+    </div>
+    <dl class="shortcuts-list">
+      <div class="shortcut-row"><dt><kbd>N</kbd></dt><dd>Focus new task input</dd></div>
+      <div class="shortcut-row"><dt><kbd>/</kbd></dt><dd>Focus search</dd></div>
+      <div class="shortcut-row"><dt><kbd>?</kbd></dt><dd>Show this dialog</dd></div>
+      <div class="shortcut-row"><dt><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></dt><dd>Switch status filter</dd></div>
+      <div class="shortcut-row"><dt><kbd>Esc</kbd></dt><dd>Close dialog / cancel edit</dd></div>
+      <div class="shortcut-row"><dt><kbd>Enter</kbd></dt><dd>Add task / save edit</dd></div>
+    </dl>
+  </div>
+</div>
 
 <div class="app" id="app">
 
@@ -26,7 +58,17 @@
       <div class="logo-mark" aria-hidden="true">FL</div>
       <div class="logo-name">Focus<span>List</span></div>
     </div>
-    <time class="header-date" id="headerDate" aria-live="polite"></time>
+
+    <div class="header-right">
+      <time class="header-date" id="headerDate" aria-live="polite"></time>
+      <button
+        class="shortcuts-btn"
+        id="shortcutsBtn"
+        type="button"
+        aria-label="View keyboard shortcuts"
+        title="Keyboard shortcuts (?)"
+      >?</button>
+    </div>
   </header>
 
   <!-- ── MAIN ── -->
@@ -35,19 +77,38 @@
     <!-- SIDEBAR -->
     <aside class="sidebar" aria-label="Task statistics and filters">
 
+      <!-- Progress Bar -->
+      <section class="progress-section" aria-label="Task completion progress">
+        <div class="progress-header">
+          <span class="section-label">Progress</span>
+          <span class="progress-pct" id="progressPct" aria-live="polite">0%</span>
+        </div>
+        <div
+          class="progress-bar-track"
+          role="progressbar"
+          aria-valuenow="0"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-label="Task completion percentage"
+          id="progressBar"
+        >
+          <div class="progress-bar-fill" id="progressFill"></div>
+        </div>
+      </section>
+
       <!-- Statistics -->
       <section class="stats-block" aria-label="Task statistics">
         <h2 class="section-label">Overview</h2>
         <div class="stats-grid" role="group" aria-label="Task counts">
-          <div class="stat-card total" role="status" aria-label="Total tasks">
-            <div class="stat-label" id="lbl-total">Total Tasks</div>
+          <div class="stat-card total-card" role="status">
+            <div class="stat-label" id="lbl-total">Total</div>
             <div class="stat-value total-v" id="statTotal" aria-labelledby="lbl-total">0</div>
           </div>
-          <div class="stat-card" role="status" aria-label="Completed tasks">
-            <div class="stat-label" id="lbl-done">Completed</div>
+          <div class="stat-card done-card" role="status">
+            <div class="stat-label" id="lbl-done">Done</div>
             <div class="stat-value done-v" id="statDone" aria-labelledby="lbl-done">0</div>
           </div>
-          <div class="stat-card" role="status" aria-label="Pending tasks">
+          <div class="stat-card pend-card" role="status">
             <div class="stat-label" id="lbl-pend">Pending</div>
             <div class="stat-value pend-v" id="statPend" aria-labelledby="lbl-pend">0</div>
           </div>
@@ -58,28 +119,38 @@
       <nav class="filter-group" aria-label="Filter by priority">
         <h2 class="section-label">Priority</h2>
         <div class="filter-row" id="prioFilters" role="group" aria-label="Priority filter buttons">
-          <button class="filter-btn active" data-prio="All" aria-pressed="true" aria-label="Show all priorities">
-            <span class="dot dot-all" aria-hidden="true"></span>All Priorities
+          <button class="filter-btn active" data-prio="All" aria-pressed="true">
+            <span class="dot dot-all" aria-hidden="true"></span>All
           </button>
-          <button class="filter-btn" data-prio="High" aria-pressed="false" aria-label="Show high priority tasks">
+          <button class="filter-btn" data-prio="High" aria-pressed="false">
             <span class="dot dot-high" aria-hidden="true"></span>High
           </button>
-          <button class="filter-btn" data-prio="Medium" aria-pressed="false" aria-label="Show medium priority tasks">
+          <button class="filter-btn" data-prio="Medium" aria-pressed="false">
             <span class="dot dot-med" aria-hidden="true"></span>Medium
           </button>
-          <button class="filter-btn" data-prio="Low" aria-pressed="false" aria-label="Show low priority tasks">
+          <button class="filter-btn" data-prio="Low" aria-pressed="false">
             <span class="dot dot-low" aria-hidden="true"></span>Low
           </button>
         </div>
       </nav>
 
+      <!-- Clear Completed -->
+      <div class="sidebar-footer">
+        <button
+          class="clear-btn"
+          id="clearCompleted"
+          type="button"
+          aria-label="Clear all completed tasks"
+          hidden
+        >Clear Completed</button>
+      </div>
     </aside>
 
     <!-- MAIN PANEL -->
     <section class="panel" aria-label="Task management">
 
       <!-- Add Task Form -->
-      <div class="add-form" role="form" aria-label="Add new task">
+      <form class="add-form" id="addForm" aria-label="Add new task" novalidate>
         <label for="taskInput" class="sr-only">Task title</label>
         <input
           class="add-input"
@@ -89,9 +160,10 @@
           maxlength="200"
           autocomplete="off"
           aria-label="Enter task title"
-          aria-describedby="task-hint"
-        />
-        <span id="task-hint" class="sr-only">Press Enter or click Add Task to save</span>
+          aria-describedby="task-hint inputError"
+          aria-required="true"
+        >
+        <span id="task-hint" class="sr-only">Press Enter or click Add Task to save. Maximum 200 characters.</span>
 
         <label for="prioSelect" class="sr-only">Priority level</label>
         <select class="prio-select" id="prioSelect" aria-label="Select task priority">
@@ -100,17 +172,20 @@
           <option value="Low">⬤ Low</option>
         </select>
 
-        <button class="add-btn" id="addBtn" type="button" aria-label="Add new task">
-          + Add Task
+        <button class="add-btn" id="addBtn" type="submit" aria-label="Add new task">
+          <span aria-hidden="true">+</span> Add Task
         </button>
-      </div>
+      </form>
 
-      <!-- Input validation message -->
+      <!-- Validation message -->
       <div id="inputError" class="input-error" role="alert" aria-live="assertive" aria-atomic="true"></div>
 
       <!-- Search -->
       <div class="search-bar">
-        <span class="search-icon" aria-hidden="true">&#128269;</span>
+        <svg class="search-icon" aria-hidden="true" viewBox="0 0 20 20" fill="none" width="16" height="16">
+          <circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M15 15l-2.5-2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
         <label for="searchInput" class="sr-only">Search tasks</label>
         <input
           class="search-input"
@@ -119,7 +194,8 @@
           placeholder="Search tasks…"
           aria-label="Search tasks by title"
           autocomplete="off"
-        />
+        >
+        <button class="search-clear" id="searchClear" type="button" aria-label="Clear search" hidden>✕</button>
       </div>
 
       <!-- Status Tabs -->
@@ -129,14 +205,15 @@
         <button class="tab-btn"        data-status="Completed" role="tab" aria-selected="false" aria-controls="taskList">Completed</button>
       </div>
 
+      <!-- Task count summary -->
+      <div class="list-summary" id="listSummary" aria-live="polite" aria-atomic="true"></div>
+
       <!-- Task List -->
       <div
         class="task-list"
         id="taskList"
         role="list"
         aria-label="Task list"
-        aria-live="polite"
-        aria-relevant="additions removals"
       ></div>
 
       <!-- Screen reader announcements -->
@@ -145,6 +222,10 @@
     </section>
   </main>
 
+  <!-- ── FOOTER ── -->
+  <footer role="contentinfo">
+    <p>FocusList &mdash; Tasks saved locally in your browser &middot; <button class="link-btn" id="shortcutsBtnFooter" type="button">Keyboard shortcuts (?)</button></p>
+  </footer>
 </div>
 
 <script src="app.js"></script>
