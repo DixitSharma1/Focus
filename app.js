@@ -1,241 +1,510 @@
-/* ============================================
-   FocusList — app.js
-   Frontend To-Do Application
-   ============================================ */
+/**
+ * FocusList — app.js
+ *
+ * Architecture:
+ *   1. Constants & Config
+ *   2. State Management
+ *   3. Data Persistence (localStorage with error handling)
+ *   4. Security (input sanitization)
+ *   5. Core Task Operations (CRUD)
+ *   6. Filtering & Search
+ *   7. DOM Rendering
+ *   8. Accessibility (ARIA, announcements)
+ *   9. Event Binding
+ *  10. Initialisation
+ */
 
-// ── STATE ──
-let tasks        = JSON.parse(localStorage.getItem('focuslist_tasks') || '[]');
-let statusFilter = 'All';
-let prioFilter   = 'All';
+/* ============================================================
+   1. CONSTANTS & CONFIG
+   ============================================================ */
+const STORAGE_KEY   = 'focuslist_tasks';
+const MAX_TITLE_LEN = 200;
+const PRIORITIES    = ['High', 'Medium', 'Low'];
+const STATUSES      = ['All', 'Active', 'Completed'];
 
+/* ============================================================
+   2. STATE
+   ============================================================ */
+const state = {
+  tasks:        [],
+  statusFilter: 'All',
+  prioFilter:   'All',
+};
 
-// ── INIT ──
-document.addEventListener('DOMContentLoaded', () => {
-  setDate();
-  bindEvents();
-  render();
-});
+/* ============================================================
+   3. DATA PERSISTENCE
+   ============================================================ */
 
+/**
+ * Load tasks from localStorage.
+ * Validates that persisted data is an array of valid task objects.
+ * Falls back to empty array on any error (corrupt data, parse failure).
+ * @returns {Array}
+ */
+function loadTasks() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
 
-// ── DATE ──
-function setDate() {
-  const el = document.getElementById('headerDate');
-  if (!el) return;
-  el.textContent = new Date().toLocaleDateString('en-US', {
-    weekday: 'long', month: 'long', day: 'numeric'
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    // Validate & sanitize each persisted task
+    return parsed
+      .filter(t => t && typeof t === 'object')
+      .map(t => ({
+        id:      typeof t.id === 'number' ? t.id : Date.now(),
+        title:   sanitizeText(String(t.title || '').slice(0, MAX_TITLE_LEN)),
+        priority: PRIORITIES.includes(t.priority) ? t.priority : 'Medium',
+        done:    Boolean(t.done),
+        created: typeof t.created === 'string' ? t.created : new Date().toISOString(),
+      }))
+      .filter(t => t.title.length > 0); // drop blank titles
+  } catch {
+    // Corrupt localStorage — clear and start fresh
+    try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+    return [];
+  }
+}
+
+/**
+ * Persist tasks to localStorage with graceful error handling
+ * (e.g. private browsing quota exceeded).
+ */
+function saveTasks() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.tasks));
+  } catch (err) {
+    console.warn('FocusList: Could not save to localStorage.', err);
+  }
+}
+
+/* ============================================================
+   4. SECURITY — INPUT SANITIZATION
+   ============================================================ */
+
+/**
+ * Strip HTML/script-injection characters from user input.
+ * Uses the browser's own text node for reliable encoding.
+ * @param {string} str
+ * @returns {string}
+ */
+function sanitizeText(str) {
+  if (typeof str !== 'string') return '';
+  // Trim and enforce length cap
+  return str.trim().slice(0, MAX_TITLE_LEN);
+}
+
+/**
+ * Escape a string for safe insertion into innerHTML.
+ * Prevents XSS when rendering task titles.
+ * @param {string} str
+ * @returns {string}
+ */
+function escapeHtml(str) {
+  return str
+    .replace(/&/g,  '&amp;')
+    .replace(/</g,  '&lt;')
+    .replace(/>/g,  '&gt;')
+    .replace(/"/g,  '&quot;')
+    .replace(/'/g,  '&#x27;');
+}
+
+/**
+ * Validate task title before saving.
+ * @param {string} title
+ * @returns {{ valid: boolean, message: string }}
+ */
+function validateTitle(title) {
+  if (!title || title.length === 0) {
+    return { valid: false, message: 'Task title cannot be empty.' };
+  }
+  if (title.length > MAX_TITLE_LEN) {
+    return { valid: false, message: `Title must be ${MAX_TITLE_LEN} characters or fewer.` };
+  }
+  return { valid: true, message: '' };
+}
+
+/* ============================================================
+   5. CORE TASK OPERATIONS (CRUD)
+   ============================================================ */
+
+/** Generate a unique numeric ID using timestamp + random suffix. */
+function generateId() {
+  return Date.now() * 1000 + Math.floor(Math.random() * 1000);
+}
+
+/** Add a new task to state and persist. */
+function addTask(rawTitle, priority) {
+  const title = sanitizeText(rawTitle);
+  const validation = validateTitle(title);
+
+  if (!validation.valid) {
+    showInputError(validation.message);
+    return false;
+  }
+
+  clearInputError();
+
+  const task = {
+    id:       generateId(),
+    title,
+    priority: PRIORITIES.includes(priority) ? priority : 'Medium',
+    done:     false,
+    created:  new Date().toISOString(),
+  };
+
+  state.tasks.unshift(task);
+  saveTasks();
+  announce(`Task "${title}" added.`);
+  return true;
+}
+
+/** Toggle a task's completion status. */
+function toggleTask(id) {
+  const task = state.tasks.find(t => t.id === id);
+  if (!task) return;
+  task.done = !task.done;
+  saveTasks();
+  announce(task.done ? `"${task.title}" marked complete.` : `"${task.title}" marked incomplete.`);
+}
+
+/** Update a task's title. */
+function updateTask(id, rawTitle) {
+  const title = sanitizeText(rawTitle);
+  const validation = validateTitle(title);
+  if (!validation.valid) return false;
+
+  const task = state.tasks.find(t => t.id === id);
+  if (!task) return false;
+
+  task.title = title;
+  saveTasks();
+  announce(`Task renamed to "${title}".`);
+  return true;
+}
+
+/** Remove a task by id. */
+function deleteTask(id) {
+  const task = state.tasks.find(t => t.id === id);
+  const title = task ? task.title : '';
+  state.tasks = state.tasks.filter(t => t.id !== id);
+  saveTasks();
+  if (title) announce(`Task "${title}" deleted.`);
+}
+
+/* ============================================================
+   6. FILTERING & SEARCH
+   ============================================================ */
+
+/** Return the subset of tasks that match all active filters. */
+function getVisibleTasks() {
+  const query = getEl('searchInput').value.trim().toLowerCase();
+
+  return state.tasks.filter(task => {
+    // Status filter
+    if (state.statusFilter === 'Active'    &&  task.done) return false;
+    if (state.statusFilter === 'Completed' && !task.done) return false;
+
+    // Priority filter
+    if (state.prioFilter !== 'All' && task.priority !== state.prioFilter) return false;
+
+    // Search query (case-insensitive substring)
+    if (query && !task.title.toLowerCase().includes(query)) return false;
+
+    return true;
   });
 }
 
+/* ============================================================
+   7. DOM RENDERING
+   ============================================================ */
 
-// ── BIND EVENTS ──
+/** Tiny selector helper — avoids repeated document.getElementById. */
+function getEl(id) { return document.getElementById(id); }
+
+/** Update the three statistic counters. */
+function renderStats() {
+  const total = state.tasks.length;
+  const done  = state.tasks.filter(t => t.done).length;
+  getEl('statTotal').textContent = total;
+  getEl('statDone').textContent  = done;
+  getEl('statPend').textContent  = total - done;
+}
+
+/** Render the task list based on current state & filters. */
+function renderTasks() {
+  const list    = getEl('taskList');
+  const visible = getVisibleTasks();
+
+  if (visible.length === 0) {
+    const msg = state.tasks.length === 0
+      ? 'Add your first task above.'
+      : 'No tasks match your current filters.';
+
+    list.innerHTML = `
+      <div class="empty-state" role="status">
+        <div class="empty-icon" aria-hidden="true">✦</div>
+        <p class="empty-msg">${escapeHtml(msg)}</p>
+      </div>`;
+    return;
+  }
+
+  // Build HTML string — single innerHTML assignment for performance
+  list.innerHTML = visible.map(task => {
+    const escapedTitle   = escapeHtml(task.title);
+    const isDone         = task.done;
+    const checkLabel     = isDone ? 'Mark incomplete' : 'Mark complete';
+    const checkClass     = isDone ? 'check-btn checked' : 'check-btn';
+    const itemClass      = isDone ? 'task-item done' : 'task-item';
+
+    return `
+      <div
+        class="${itemClass}"
+        data-id="${task.id}"
+        data-priority="${escapeHtml(task.priority)}"
+        role="listitem"
+      >
+        <button
+          class="${checkClass}"
+          data-action="toggle"
+          aria-label="${checkLabel}: ${escapedTitle}"
+          aria-pressed="${isDone}"
+          type="button"
+        >
+          <span class="tick" aria-hidden="true">✓</span>
+        </button>
+
+        <div class="task-body">
+          <div class="task-title" id="title-${task.id}">${escapedTitle}</div>
+          <div class="task-meta" aria-label="Priority: ${escapeHtml(task.priority)}">
+            <span class="priority-badge badge-${escapeHtml(task.priority)}" aria-hidden="true">
+              ${escapeHtml(task.priority)}
+            </span>
+          </div>
+        </div>
+
+        <div class="task-actions" role="group" aria-label="Actions for ${escapedTitle}">
+          <button
+            class="icon-btn edit"
+            data-action="edit"
+            aria-label="Edit task: ${escapedTitle}"
+            title="Edit"
+            type="button"
+          >✎</button>
+          <button
+            class="icon-btn del"
+            data-action="delete"
+            aria-label="Delete task: ${escapedTitle}"
+            title="Delete"
+            type="button"
+          >✕</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+/** Full render pass — stats + tasks. */
+function render() {
+  renderStats();
+  renderTasks();
+}
+
+/* ============================================================
+   8. ACCESSIBILITY HELPERS
+   ============================================================ */
+
+/**
+ * Post a screen-reader announcement via a live region.
+ * @param {string} message
+ */
+function announce(message) {
+  const el = getEl('srAnnounce');
+  if (!el) return;
+  el.textContent = '';
+  // Force DOM mutation so assistive tech fires the event
+  requestAnimationFrame(() => { el.textContent = message; });
+}
+
+/** Show inline validation error below the input. */
+function showInputError(message) {
+  const el    = getEl('inputError');
+  const input = getEl('taskInput');
+  if (el)    el.textContent = message;
+  if (input) input.classList.add('error');
+  if (input) input.setAttribute('aria-invalid', 'true');
+}
+
+/** Clear inline validation error. */
+function clearInputError() {
+  const el    = getEl('inputError');
+  const input = getEl('taskInput');
+  if (el)    el.textContent = '';
+  if (input) input.classList.remove('error');
+  if (input) input.removeAttribute('aria-invalid');
+}
+
+/* ============================================================
+   9. EVENT BINDING
+   ============================================================ */
 function bindEvents() {
-  // Add task button
-  document.getElementById('addBtn').addEventListener('click', addTask);
 
-  // Enter key on task input
-  document.getElementById('taskInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') addTask();
+  /* ── Add Task ── */
+  getEl('addBtn').addEventListener('click', handleAddTask);
+  getEl('taskInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') handleAddTask();
+  });
+  getEl('taskInput').addEventListener('input', () => {
+    if (getEl('taskInput').value.trim()) clearInputError();
   });
 
-  // Live search
-  document.getElementById('searchInput').addEventListener('input', render);
+  /* ── Search ── */
+  getEl('searchInput').addEventListener('input', render);
 
-  // Status tabs
-  document.getElementById('statusTabs').addEventListener('click', e => {
+  /* ── Status Tabs ── */
+  getEl('statusTabs').addEventListener('click', e => {
     const btn = e.target.closest('.tab-btn');
     if (!btn) return;
-    statusFilter = btn.dataset.status;
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
+
+    state.statusFilter = btn.dataset.status;
+
+    // Update active state + ARIA
+    document.querySelectorAll('.tab-btn').forEach(b => {
+      b.classList.toggle('active', b === btn);
+      b.setAttribute('aria-selected', b === btn ? 'true' : 'false');
+    });
+
     render();
   });
 
-  // Priority filters
-  document.getElementById('prioFilters').addEventListener('click', e => {
+  /* ── Priority Filter Buttons ── */
+  getEl('prioFilters').addEventListener('click', e => {
     const btn = e.target.closest('.filter-btn');
     if (!btn) return;
-    prioFilter = btn.dataset.prio;
-    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
+
+    state.prioFilter = btn.dataset.prio;
+
+    document.querySelectorAll('.filter-btn').forEach(b => {
+      b.classList.toggle('active', b === btn);
+      b.setAttribute('aria-pressed', b === btn ? 'true' : 'false');
+    });
+
     render();
   });
 
-  // Task list delegation (check / edit / delete)
-  document.getElementById('taskList').addEventListener('click', e => {
-    const checkBtn = e.target.closest('.check-btn');
-    const editBtn  = e.target.closest('.icon-btn.edit');
-    const delBtn   = e.target.closest('.icon-btn.del');
+  /* ── Task List — event delegation ── */
+  getEl('taskList').addEventListener('click', e => {
+    const btn  = e.target.closest('[data-action]');
+    if (!btn) return;
 
-    if (checkBtn) {
-      const id = getTaskId(checkBtn);
-      if (id !== null) toggleTask(id);
-    } else if (editBtn) {
-      const id = getTaskId(editBtn);
-      if (id !== null) startEdit(id);
-    } else if (delBtn) {
-      const id = getTaskId(delBtn);
-      if (id !== null) deleteTask(id);
+    const item = btn.closest('.task-item');
+    if (!item) return;
+
+    const id     = Number(item.dataset.id);
+    const action = btn.dataset.action;
+
+    if (action === 'toggle') { toggleTask(id); render(); }
+    if (action === 'edit')   { startInlineEdit(id); }
+    if (action === 'delete') { deleteTask(id); render(); }
+  });
+
+  /* ── Keyboard navigation within task list ── */
+  getEl('taskList').addEventListener('keydown', e => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+
+    // Allow Enter and Space to trigger buttons (redundant for <button> but explicit)
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      btn.click();
     }
   });
 }
 
+/* ── Add Task Handler ── */
+function handleAddTask() {
+  const input    = getEl('taskInput');
+  const rawTitle = input.value;
+  const priority = getEl('prioSelect').value;
 
-// ── HELPERS ──
-function getTaskId(el) {
-  const item = el.closest('.task-item');
-  return item ? Number(item.dataset.id) : null;
+  const success = addTask(rawTitle, priority);
+  if (success) {
+    render();
+    input.value = '';
+    input.focus();
+  } else {
+    input.focus();
+  }
 }
 
-function save() {
-  localStorage.setItem('focuslist_tasks', JSON.stringify(tasks));
-}
-
-function escHtml(str) {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-
-// ── ADD TASK ──
-function addTask() {
-  const input = document.getElementById('taskInput');
-  const title = input.value.trim();
-  if (!title) { input.focus(); return; }
-
-  const priority = document.getElementById('prioSelect').value;
-
-  tasks.unshift({
-    id:       Date.now(),
-    title,
-    priority,
-    done:     false,
-    created:  new Date().toISOString()
-  });
-
-  save();
-  render();
-  input.value = '';
-  input.focus();
-}
-
-
-// ── TOGGLE COMPLETE ──
-function toggleTask(id) {
-  const task = tasks.find(t => t.id === id);
-  if (!task) return;
-  task.done = !task.done;
-  save();
-  render();
-}
-
-
-// ── DELETE TASK ──
-function deleteTask(id) {
-  tasks = tasks.filter(t => t.id !== id);
-  save();
-  render();
-}
-
-
-// ── EDIT TASK (inline) ──
-function startEdit(id) {
-  const task = tasks.find(t => t.id === id);
+/* ── Inline Edit ── */
+function startInlineEdit(id) {
+  const task    = state.tasks.find(t => t.id === id);
   if (!task) return;
 
   const titleEl = document.querySelector(`.task-item[data-id="${id}"] .task-title`);
   if (!titleEl) return;
 
-  // Replace title with input
-  const input = document.createElement('input');
-  input.className = 'task-edit-input';
-  input.value = task.title;
-  titleEl.replaceWith(input);
-  input.focus();
-  input.select();
+  const editInput = document.createElement('input');
+  editInput.type      = 'text';
+  editInput.className = 'task-edit-input';
+  editInput.value     = task.title;
+  editInput.maxLength = MAX_TITLE_LEN;
+  editInput.setAttribute('aria-label', `Edit task: ${task.title}`);
+
+  titleEl.replaceWith(editInput);
+  editInput.focus();
+  editInput.select();
+
+  let committed = false;
 
   function commit() {
-    const newTitle = input.value.trim();
-    if (newTitle) task.title = newTitle;
-    save();
+    if (committed) return;
+    committed = true;
+    const success = updateTask(id, editInput.value);
+    if (!success) {
+      // Revert on invalid input
+      announce('Edit cancelled — title cannot be empty.');
+    }
     render();
   }
 
   function cancel() {
-    input.removeEventListener('blur', commit);
+    if (committed) return;
+    committed = true;
     render();
   }
 
-  input.addEventListener('blur', commit);
-  input.addEventListener('keydown', e => {
-    if (e.key === 'Enter')  { input.blur(); }
-    if (e.key === 'Escape') { cancel(); }
+  editInput.addEventListener('blur',    commit);
+  editInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter')  { editInput.blur(); }
+    if (e.key === 'Escape') {
+      editInput.removeEventListener('blur', commit);
+      cancel();
+    }
   });
 }
 
+/* ============================================================
+   10. INITIALISATION
+   ============================================================ */
+document.addEventListener('DOMContentLoaded', () => {
 
-// ── UPDATE STATS ──
-function updateStats() {
-  const total = tasks.length;
-  const done  = tasks.filter(t => t.done).length;
-  document.getElementById('statTotal').textContent = total;
-  document.getElementById('statDone').textContent  = done;
-  document.getElementById('statPend').textContent  = total - done;
-}
-
-
-// ── RENDER ──
-function render() {
-  updateStats();
-
-  const query = document.getElementById('searchInput').value.trim().toLowerCase();
-
-  const visible = tasks.filter(task => {
-    if (statusFilter === 'Active'    &&  task.done) return false;
-    if (statusFilter === 'Completed' && !task.done) return false;
-    if (prioFilter !== 'All' && task.priority !== prioFilter) return false;
-    if (query && !task.title.toLowerCase().includes(query)) return false;
-    return true;
-  });
-
-  const list = document.getElementById('taskList');
-
-  if (visible.length === 0) {
-    list.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-icon">✦</div>
-        <div class="empty-msg">
-          ${tasks.length === 0
-            ? 'Add your first task above.'
-            : 'No tasks match your current filters.'}
-        </div>
-      </div>`;
-    return;
+  // Set header date
+  const dateEl = getEl('headerDate');
+  if (dateEl) {
+    dateEl.textContent = new Date().toLocaleDateString('en-US', {
+      weekday: 'long', month: 'long', day: 'numeric',
+    });
+    dateEl.setAttribute('datetime', new Date().toISOString().split('T')[0]);
   }
 
-  list.innerHTML = visible.map(task => `
-    <div class="task-item ${task.done ? 'done' : ''}" data-id="${task.id}" data-priority="${task.priority}">
-      <button
-        class="check-btn ${task.done ? 'checked' : ''}"
-        aria-label="${task.done ? 'Mark incomplete' : 'Mark complete'}"
-        title="${task.done ? 'Mark incomplete' : 'Mark complete'}"
-      >
-        <span class="tick">✓</span>
-      </button>
+  // Load persisted data into state
+  state.tasks = loadTasks();
 
-      <div class="task-body">
-        <div class="task-title">${escHtml(task.title)}</div>
-        <div class="task-meta">
-          <span class="priority-badge badge-${task.priority}">${task.priority}</span>
-        </div>
-      </div>
+  // Bind all UI events
+  bindEvents();
 
-      <div class="task-actions">
-        <button class="icon-btn edit" aria-label="Edit task" title="Edit">✎</button>
-        <button class="icon-btn del"  aria-label="Delete task" title="Delete">✕</button>
-      </div>
-    </div>
-  `).join('');
-}
+  // Initial render
+  render();
+});

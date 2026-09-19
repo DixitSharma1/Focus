@@ -3,95 +3,150 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>FocusList</title>
+  <meta name="description" content="FocusList — A clean, accessible task management app to organize your daily focus.">
+  <meta name="theme-color" content="#0F1729">
+  <title>FocusList — Stay Focused</title>
+
+  <!-- Preconnect for performance -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="app">
 
-  <header>
-    <div class="logo">
-      <div class="logo-mark">FL</div>
+<!-- ── SKIP NAVIGATION (Accessibility) ── -->
+<a href="#main-content" class="skip-link">Skip to main content</a>
+
+<div class="app" id="app">
+
+  <!-- ── HEADER ── -->
+  <header role="banner">
+    <div class="logo" aria-label="FocusList application">
+      <div class="logo-mark" aria-hidden="true">FL</div>
       <div class="logo-name">Focus<span>List</span></div>
     </div>
-    <div class="header-date" id="headerDate"></div>
+    <time class="header-date" id="headerDate" aria-live="polite"></time>
   </header>
 
-  <main>
-    <!-- SIDEBAR -->
-    <aside class="sidebar">
-      <div class="stats-block">
-        <div class="stats-grid">
-          <div class="stat-card total">
-            <div class="stat-label">Total Tasks</div>
-            <div class="stat-value total-v" id="statTotal">0</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Completed</div>
-            <div class="stat-value done-v" id="statDone">0</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Pending</div>
-            <div class="stat-value pend-v" id="statPend">0</div>
-          </div>
-        </div>
-      </div>
+  <!-- ── MAIN ── -->
+  <main id="main-content" role="main">
 
-      <div class="filter-group">
-        <div class="section-label">Priority</div>
-        <div class="filter-row" id="prioFilters">
-          <button class="filter-btn active" data-prio="All">
-            <span class="dot dot-all"></span>All Priorities
+    <!-- SIDEBAR -->
+    <aside class="sidebar" aria-label="Task statistics and filters">
+
+      <!-- Statistics -->
+      <section class="stats-block" aria-label="Task statistics">
+        <h2 class="section-label">Overview</h2>
+        <div class="stats-grid" role="group" aria-label="Task counts">
+          <div class="stat-card total" role="status" aria-label="Total tasks">
+            <div class="stat-label" id="lbl-total">Total Tasks</div>
+            <div class="stat-value total-v" id="statTotal" aria-labelledby="lbl-total">0</div>
+          </div>
+          <div class="stat-card" role="status" aria-label="Completed tasks">
+            <div class="stat-label" id="lbl-done">Completed</div>
+            <div class="stat-value done-v" id="statDone" aria-labelledby="lbl-done">0</div>
+          </div>
+          <div class="stat-card" role="status" aria-label="Pending tasks">
+            <div class="stat-label" id="lbl-pend">Pending</div>
+            <div class="stat-value pend-v" id="statPend" aria-labelledby="lbl-pend">0</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Priority Filter -->
+      <nav class="filter-group" aria-label="Filter by priority">
+        <h2 class="section-label">Priority</h2>
+        <div class="filter-row" id="prioFilters" role="group" aria-label="Priority filter buttons">
+          <button class="filter-btn active" data-prio="All" aria-pressed="true" aria-label="Show all priorities">
+            <span class="dot dot-all" aria-hidden="true"></span>All Priorities
           </button>
-          <button class="filter-btn" data-prio="High">
-            <span class="dot dot-high"></span>High
+          <button class="filter-btn" data-prio="High" aria-pressed="false" aria-label="Show high priority tasks">
+            <span class="dot dot-high" aria-hidden="true"></span>High
           </button>
-          <button class="filter-btn" data-prio="Medium">
-            <span class="dot dot-med"></span>Medium
+          <button class="filter-btn" data-prio="Medium" aria-pressed="false" aria-label="Show medium priority tasks">
+            <span class="dot dot-med" aria-hidden="true"></span>Medium
           </button>
-          <button class="filter-btn" data-prio="Low">
-            <span class="dot dot-low"></span>Low
+          <button class="filter-btn" data-prio="Low" aria-pressed="false" aria-label="Show low priority tasks">
+            <span class="dot dot-low" aria-hidden="true"></span>Low
           </button>
         </div>
-      </div>
+      </nav>
+
     </aside>
 
     <!-- MAIN PANEL -->
-    <section class="panel">
+    <section class="panel" aria-label="Task management">
 
-      <!-- Add Task -->
-      <div class="add-form">
-        <input class="add-input" id="taskInput" type="text" placeholder="What do you need to focus on?" maxlength="200" />
-        <select class="prio-select" id="prioSelect">
+      <!-- Add Task Form -->
+      <div class="add-form" role="form" aria-label="Add new task">
+        <label for="taskInput" class="sr-only">Task title</label>
+        <input
+          class="add-input"
+          id="taskInput"
+          type="text"
+          placeholder="What do you need to focus on?"
+          maxlength="200"
+          autocomplete="off"
+          aria-label="Enter task title"
+          aria-describedby="task-hint"
+        />
+        <span id="task-hint" class="sr-only">Press Enter or click Add Task to save</span>
+
+        <label for="prioSelect" class="sr-only">Priority level</label>
+        <select class="prio-select" id="prioSelect" aria-label="Select task priority">
           <option value="Medium">⬤ Medium</option>
           <option value="High">⬤ High</option>
           <option value="Low">⬤ Low</option>
         </select>
-        <button class="add-btn" id="addBtn">+ Add Task</button>
+
+        <button class="add-btn" id="addBtn" type="button" aria-label="Add new task">
+          + Add Task
+        </button>
       </div>
+
+      <!-- Input validation message -->
+      <div id="inputError" class="input-error" role="alert" aria-live="assertive" aria-atomic="true"></div>
 
       <!-- Search -->
       <div class="search-bar">
-        <span class="search-icon">&#128269;</span>
-        <input class="search-input" id="searchInput" type="text" placeholder="Search tasks…" />
+        <span class="search-icon" aria-hidden="true">&#128269;</span>
+        <label for="searchInput" class="sr-only">Search tasks</label>
+        <input
+          class="search-input"
+          id="searchInput"
+          type="search"
+          placeholder="Search tasks…"
+          aria-label="Search tasks by title"
+          autocomplete="off"
+        />
       </div>
 
       <!-- Status Tabs -->
-      <div class="status-tabs" id="statusTabs">
-        <button class="tab-btn active" data-status="All">All</button>
-        <button class="tab-btn" data-status="Active">Active</button>
-        <button class="tab-btn" data-status="Completed">Completed</button>
+      <div class="status-tabs" id="statusTabs" role="tablist" aria-label="Filter tasks by status">
+        <button class="tab-btn active" data-status="All"       role="tab" aria-selected="true"  aria-controls="taskList">All</button>
+        <button class="tab-btn"        data-status="Active"    role="tab" aria-selected="false" aria-controls="taskList">Active</button>
+        <button class="tab-btn"        data-status="Completed" role="tab" aria-selected="false" aria-controls="taskList">Completed</button>
       </div>
 
       <!-- Task List -->
-      <div class="task-list" id="taskList"></div>
+      <div
+        class="task-list"
+        id="taskList"
+        role="list"
+        aria-label="Task list"
+        aria-live="polite"
+        aria-relevant="additions removals"
+      ></div>
+
+      <!-- Screen reader announcements -->
+      <div id="srAnnounce" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
 
     </section>
   </main>
 
 </div>
+
 <script src="app.js"></script>
 </body>
 </html>
