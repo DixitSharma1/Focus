@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>FocusList</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div class="logo">
+      <div class="logo-mark">FL</div>
+      <div class="logo-name">Focus<span>List</span></div>
+    </div>
+    <div class="header-date" id="headerDate"></div>
+  </header>
+
+  <main>
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="stats-block">
+        <div class="stats-grid">
+          <div class="stat-card total">
+            <div class="stat-label">Total Tasks</div>
+            <div class="stat-value total-v" id="statTotal">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Completed</div>
+            <div class="stat-value done-v" id="statDone">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Pending</div>
+            <div class="stat-value pend-v" id="statPend">0</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <div class="section-label">Priority</div>
+        <div class="filter-row" id="prioFilters">
+          <button class="filter-btn active" data-prio="All">
+            <span class="dot dot-all"></span>All Priorities
+          </button>
+          <button class="filter-btn" data-prio="High">
+            <span class="dot dot-high"></span>High
+          </button>
+          <button class="filter-btn" data-prio="Medium">
+            <span class="dot dot-med"></span>Medium
+          </button>
+          <button class="filter-btn" data-prio="Low">
+            <span class="dot dot-low"></span>Low
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN PANEL -->
+    <section class="panel">
+
+      <!-- Add Task -->
+      <div class="add-form">
+        <input class="add-input" id="taskInput" type="text" placeholder="What do you need to focus on?" maxlength="200" />
+        <select class="prio-select" id="prioSelect">
+          <option value="Medium">⬤ Medium</option>
+          <option value="High">⬤ High</option>
+          <option value="Low">⬤ Low</option>
+        </select>
+        <button class="add-btn" id="addBtn">+ Add Task</button>
+      </div>
+
+      <!-- Search -->
+      <div class="search-bar">
+        <span class="search-icon">&#128269;</span>
+        <input class="search-input" id="searchInput" type="text" placeholder="Search tasks…" />
+      </div>
+
+      <!-- Status Tabs -->
+      <div class="status-tabs" id="statusTabs">
+        <button class="tab-btn active" data-status="All">All</button>
+        <button class="tab-btn" data-status="Active">Active</button>
+        <button class="tab-btn" data-status="Completed">Completed</button>
+      </div>
+
+      <!-- Task List -->
+      <div class="task-list" id="taskList"></div>
+
+    </section>
+  </main>
+
+</div>
+<script src="app.js"></script>
+</body>
+</html>
